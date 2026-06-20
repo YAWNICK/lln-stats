@@ -1,4 +1,4 @@
-from lln_stats.extract import extract_year
+from lln_stats.extract import extract_all, extract_year
 from lln_stats.normalize import TARGET_EVENTS, parse_gender, parse_result_mark, parse_time_seconds
 from lln_stats.schema import RESULT_COLUMNS
 
@@ -27,7 +27,7 @@ def test_legacy_html_2016_row() -> None:
     assert row.year_of_birth == 1988
     assert row.result_raw == "1:47,42"
     assert row.rank_within_heat == 1
-    assert row.heat == 7
+    assert row.heat == 9
 
 
 def test_pdf_2019_uses_heat_sections() -> None:
@@ -42,7 +42,7 @@ def test_pdf_2019_uses_heat_sections() -> None:
     assert row.heat == 1
     later_heat = df[df.athlete_name == "Belbachir Mohamed"].iloc[0]
     assert later_heat.result_raw == "1:46,00"
-    assert later_heat.heat == 11
+    assert later_heat.heat == 18
 
 
 def test_mixed_sections_get_row_gender() -> None:
@@ -85,6 +85,26 @@ def test_pdf_2023_uses_rank_heat_mark() -> None:
     assert row.result_raw == "1:45,62"
     assert row.rank_within_heat == 1
     assert row.heat == 11
+
+
+def test_pdf_joins_wrapped_rank_heat_marks() -> None:
+    cases = [
+        (2023, "Ruchti Jonathan", 14, 8),
+        (2025, "Oberbeck Luis", 10, 16),
+        (2026, "Holzapfel Tim", 2, 18),
+    ]
+    for year, athlete_name, rank, heat in cases:
+        row = extract_year(year).query("athlete_name == @athlete_name").iloc[0]
+        assert row.rank_within_heat == rank
+        assert row.heat == heat
+
+
+def test_heat_rank_key_is_unique_across_all_years() -> None:
+    df = extract_all()
+    ranked = df[df.rank_within_heat.notna() & df.heat.notna()]
+    assert not ranked.duplicated(
+        ["event_year", "event", "rank_within_heat", "heat"]
+    ).any()
 
 
 def test_pdf_2024_does_not_treat_wind_as_event() -> None:

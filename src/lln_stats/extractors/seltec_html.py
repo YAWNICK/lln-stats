@@ -47,7 +47,8 @@ def extract(path: str | Path) -> object:
         if "Name" not in cells or "Perf" not in cells:
             continue
 
-        rank_from_mark, heat_from_mark = parse_result_mark(cells.get("Mark"))
+        mark = cells.get("Mark")
+        rank_from_mark, heat_from_mark = parse_result_mark(mark)
         rows.append(
             {
                 "event_year": event_year,
@@ -59,7 +60,7 @@ def extract(path: str | Path) -> object:
                 "nationality": _nationality(cells.get("Nat"), event_year),
                 "club": cells.get("Team"),
                 "result_raw": cells.get("Perf"),
-                "rank_within_heat": rank_from_mark or cells.get("Pos"),
+                "rank_within_heat": rank_from_mark if mark else cells.get("Pos"),
                 "heat": current_heat or heat_from_mark,
                 "source_file": str(source),
                 "source_type": "seltec_html",
@@ -81,9 +82,9 @@ def _section_heats(soup: BeautifulSoup) -> dict[int, int]:
         sections.append((id(node), event, parse_gender(title), _section_start_minutes(node), order))
 
     heats: dict[int, int] = {}
-    keys = {(event, gender) for _, event, gender, _, _ in sections}
-    for key in keys:
-        matching = [section for section in sections if (section[1], section[2]) == key]
+    events = {event for _, event, _, _, _ in sections}
+    for event in events:
+        matching = [section for section in sections if section[1] == event]
         matching.sort(key=lambda section: (section[3] is None, section[3] or section[4], section[4]))
         for heat, section in enumerate(matching, start=1):
             heats[section[0]] = heat

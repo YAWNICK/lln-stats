@@ -5,7 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from lln_stats.normalize import finalize_frame, normalize_event_code
+from lln_stats.normalize import (
+    assign_heat_ranks,
+    finalize_frame,
+    normalize_event_code,
+    renumber_gender_heats,
+)
 
 
 def extract(path: str | Path) -> object:
@@ -43,7 +48,6 @@ def extract(path: str | Path) -> object:
             if not athlete:
                 continue
             club = clubs.get(athlete.get("club", ""), {})
-            place = result.attrib.get("place")
             rows.append(
                 {
                     "event_year": event_year,
@@ -55,11 +59,13 @@ def extract(path: str | Path) -> object:
                     "nationality": athlete.get("country"),
                     "club": club.get("name"),
                     "result_raw": result.attrib.get("result"),
-                    "rank_within_heat": place if place and place != "0" else None,
+                    # SELTEC's place is scoped to the age-class result view, not
+                    # to the physical heat shared by all age classes.
+                    "rank_within_heat": None,
                     "heat": round_id,
                     "source_file": str(source),
                     "source_type": "seltec_xml",
                 }
             )
 
-    return finalize_frame(rows)
+    return assign_heat_ranks(renumber_gender_heats(finalize_frame(rows)))

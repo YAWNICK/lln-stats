@@ -217,6 +217,70 @@ def finalize_frame(rows: list[dict[str, Any]]) -> pd.DataFrame:
     return df[RESULT_COLUMNS]
 
 
+def renumber_gender_heats(df: pd.DataFrame) -> pd.DataFrame:
+    """Turn gender-scoped source heat IDs into event-wide heat IDs.
+
+    Event/gender sections retain their source order. Within each section, heat
+    IDs retain their source order, so mixed-gender IDs cannot collide.
+    """
+    if df.empty:
+        return df
+    result = df.copy()
+    for event in result["event"].dropna().unique():
+        event_rows = result[result["event"] == event]
+        groups = event_rows[["gender", "heat"]].drop_duplicates()
+        groups = groups[groups["heat"].notna()]
+        next_heat = 1
+        for gender in groups["gender"].drop_duplicates().tolist():
+            if pd.isna(gender):
+                gender_rows = groups[groups["gender"].isna()]
+                mask_gender = result["gender"].isna()
+            else:
+                gender_rows = groups[groups["gender"] == gender]
+                mask_gender = result["gender"] == gender
+            for old_heat in sorted(gender_rows["heat"].astype(int).unique()):
+                mask = (result["event"] == event) & mask_gender & (result["heat"] == old_heat)
+                result.loc[mask, "heat"] = next_heat
+                next_heat += 1
+    result["heat"] = result["heat"].astype("Int64")
+    return result
+
+
+def assign_heat_ranks(df: pd.DataFrame) -> pd.DataFrame:
+    """Derive ordinal finish positions from times within each physical heat."""
+    if df.empty:
+        return df
+    result = df.copy()
+    result["rank_within_heat"] = pd.Series(pd.NA, index=result.index, dtype="Int64")
+    finished = result["time_seconds"].notna() & result["heat"].notna()
+    result.loc[finished, "rank_within_heat"] = (
+        result.loc[finished]
+        .groupby(["event", "heat"], dropna=False)["time_seconds"]
+        .rank(method="first")
+        .astype("Int64")
+    )
+    return result
+
+
+def make_heat_ranks_unique(df: pd.DataFrame) -> pd.DataFrame:
+    """Resolve tied source places with the next unused ordinal position."""
+    if df.empty:
+        return df
+    result = df.copy()
+    for _, heat_rows in result.groupby(["event", "heat"], dropna=False, sort=False):
+        used: set[int] = set()
+        for index, rank in heat_rows["rank_within_heat"].items():
+            if pd.isna(rank):
+                continue
+            unique_rank = int(rank)
+            while unique_rank in used:
+                unique_rank += 1
+            result.at[index, "rank_within_heat"] = unique_rank
+            used.add(unique_rank)
+    result["rank_within_heat"] = result["rank_within_heat"].astype("Int64")
+    return result
+
+
 def filter_target_results(df: pd.DataFrame) -> pd.DataFrame:
     """Keep only target LLN running events, excluding side events and relays."""
     if df.empty:

@@ -10,7 +10,14 @@ from typing import Iterable
 
 import pdfplumber
 
-from lln_stats.normalize import finalize_frame, normalize_event, parse_gender, parse_result_mark
+from lln_stats.normalize import (
+    finalize_frame,
+    normalize_event,
+    normalize_event_feature,
+    parse_gender,
+    parse_result_mark,
+    renumber_gender_heats,
+)
 
 
 EVENT_RE = re.compile(r"(?<![A-Za-z])(?:\d[.\d]*\s*m|[1-9]\d{2,3}m)(?:\s+Hindernis)?")
@@ -38,7 +45,7 @@ def extract(path: str | Path) -> object:
     current_event: str | None = None
     current_gender: str | None = None
     current_heat: int | None = None
-    inferred_heat_counts: dict[tuple[str | None, str | None], int] = {}
+    inferred_heat_counts: dict[str | None, int] = {}
     last_row: dict[str, object] | None = None
 
     with pdfplumber.open(source) as pdf:
@@ -54,7 +61,9 @@ def extract(path: str | Path) -> object:
                     current_event = normalize_event(event_line)
                     current_gender = parse_gender(event_line)
                     current_heat = (
-                        _next_inferred_heat(inferred_heat_counts, current_event, current_gender)
+                        _next_inferred_heat(
+                            inferred_heat_counts, normalize_event_feature(current_event)
+                        )
                         if event_year == 2019
                         else None
                     )
@@ -73,7 +82,8 @@ def extract(path: str | Path) -> object:
 
                 row = _parse_result_line(line)
                 if row:
-                    rank_from_mark, heat_from_mark = parse_result_mark(row.pop("mark", None))
+                    result_mark = row.pop("mark", None)
+                    rank_from_mark, heat_from_mark = parse_result_mark(result_mark)
                     gender = current_gender or parse_gender(current_event_line)
                     if gender is None and event_year == 2019 and current_event == "5000m":
                         gender = gender_lookup.get(str(row.get("athlete_name") or ""))
@@ -88,9 +98,20 @@ def extract(path: str | Path) -> object:
                             "source_type": "result_pdf",
                         }
                     )
+                    row["_result_mark"] = result_mark
                     row.pop("rank", None)
                     rows.append(row)
                     last_row = row
+                    continue
+
+                mark_continuation = _mark_continuation(line)
+                if last_row is not None and mark_continuation:
+                    mark = f"{last_row.get('_result_mark') or ''}{mark_continuation}"
+                    rank_from_mark, heat_from_mark = parse_result_mark(mark)
+                    if heat_from_mark is not None:
+                        last_row["rank_within_heat"] = rank_from_mark
+                        last_row["heat"] = heat_from_mark
+                        last_row["_result_mark"] = mark
                     continue
 
                 if last_row is not None and _looks_like_club_continuation(line):
@@ -98,7 +119,8 @@ def extract(path: str | Path) -> object:
                     if extra:
                         last_row["club"] = f"{last_row.get('club') or ''} {extra}".strip()
 
-    return finalize_frame(rows)
+    frame = finalize_frame(rows)
+    return renumber_gender_heats(frame) if event_year >= 2023 else frame
 
 
 def _load_gender_lookup(source: Path) -> dict[str, str]:
@@ -159,13 +181,11 @@ def _heat_from_line(text: str) -> int | None:
 
 
 def _next_inferred_heat(
-    counts: dict[tuple[str | None, str | None], int],
+    counts: dict[str | None, int],
     event: str | None,
-    gender: str | None,
 ) -> int:
-    key = (event, gender)
-    counts[key] = counts.get(key, 0) + 1
-    return counts[key]
+    counts[event] = counts.get(event, 0) + 1
+    return counts[event]
 
 
 def _row_heat(event_year: int, current_heat: int | None, heat_from_mark: int | None) -> int:
@@ -210,3 +230,11 @@ def _looks_like_club_continuation(line: Line) -> bool:
     if _is_noise(text) or _event_line(text) or _heat_from_line(text):
         return False
     return bool(line.between(270, 420)) and not line.between(58, 80)
+
+
+def _mark_continuation(line: Line) -> str | None:
+    """Return a heat-mark fragment wrapped below the preceding result row."""
+    if line.between(30, 485):
+        return None
+    text = "".join(line.between(485, 570)).replace(" ", "")
+    return text if re.fullmatch(r"[IVXLCDM]+|\d+", text) else None
