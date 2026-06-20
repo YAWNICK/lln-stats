@@ -56,7 +56,7 @@ def extract(path: str | Path) -> object:
                 "bib_number": cells.get("BIB") or cells.get("Bib"),
                 "gender": current_table_gender or current_gender,
                 "year_of_birth": cells.get("YOB"),
-                "nationality": cells.get("Nat"),
+                "nationality": _nationality(cells.get("Nat"), event_year),
                 "club": cells.get("Team"),
                 "result_raw": cells.get("Perf"),
                 "rank_within_heat": rank_from_mark or cells.get("Pos"),
@@ -103,6 +103,12 @@ def _section_start_minutes(node: Tag) -> int | None:
 
 def _is_track_event(text: str | None) -> bool:
     return bool(text and re.search(r"\d+\s*m|\d+m|Hindernis", text))
+
+
+def _nationality(value: str | None, event_year: int) -> str | None:
+    if event_year in {2016, 2017, 2018} and not value:
+        return "GER"
+    return value
 
 
 def _table_header_gender(row: Tag) -> str | None:

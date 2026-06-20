@@ -55,6 +55,13 @@ def test_mixed_sections_get_row_gender() -> None:
     assert df_2019.gender.isna().sum() == 0
 
 
+def test_legacy_html_defaults_empty_nationality_to_germany() -> None:
+    for year in [2016, 2017, 2018]:
+        df = extract_year(year)
+        assert df.nationality.isna().sum() == 0
+        assert (df.nationality.str.strip() == "").sum() == 0
+
+
 def test_xml_2021_uses_bib_country_and_heat_round() -> None:
     df = extract_year(2021)
     row = df.iloc[0]
