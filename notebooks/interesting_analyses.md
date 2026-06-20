@@ -10,3 +10,4 @@
   - Has someone competed twice in one year?
   - Who has competed in the most (unique) events over the 10 years?
 - Who has the best average rank_within_heat? (per event to make it fair) (but also per number of years participated) Was there someone who got really lucky / unlucky?
+- Something with all time top k lists
