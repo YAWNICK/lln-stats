@@ -126,3 +126,12 @@ def test_default_extraction_skips_flat_3000m_and_relay_rows() -> None:
     df_2017 = extract_year(2017)
     assert "3000m" not in set(df_2017.event.dropna())
     assert not df_2017.athlete_name.str.contains("Staffel", case=False, na=False).any()
+
+
+def test_legacy_html_skips_schulstaffel_sections() -> None:
+    df_2017 = extract_year(2017, target_only=False)
+    df_2018 = extract_year(2018, target_only=False)
+
+    assert not df_2017.athlete_name.str.contains("Bismarck Gymnasium 6c", na=False).any()
+    assert not df_2017.athlete_name.str.contains("Comenius Realschule Staffel", case=False, na=False).any()
+    assert not df_2018.athlete_name.str.contains("Bismarck & Friends", na=False).any()

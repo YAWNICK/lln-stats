@@ -25,7 +25,7 @@ def extract(path: str | Path) -> object:
     for node in soup.body.find_all(["p", "tr"], recursive=True):
         if isinstance(node, Tag) and node.name == "p" and "ev1" in (node.get("class") or []):
             current_event = _section_title(node)
-            if not _is_track_event(current_event):
+            if not _is_track_event(current_event) or _is_excluded_event(current_event):
                 current_event = None
                 current_gender = None
                 current_table_gender = None
@@ -73,7 +73,7 @@ def _section_heats(soup: BeautifulSoup) -> dict[int, int]:
     sections: list[tuple[int, str, str | None, int | None, int]] = []
     for order, node in enumerate(soup.select("p.ev1")):
         title = _section_title(node)
-        if not _is_track_event(title):
+        if not _is_track_event(title) or _is_excluded_event(title):
             continue
         event = normalize_event(title)
         if not event:
@@ -103,6 +103,10 @@ def _section_start_minutes(node: Tag) -> int | None:
 
 def _is_track_event(text: str | None) -> bool:
     return bool(text and re.search(r"\d+\s*m|\d+m|Hindernis", text))
+
+
+def _is_excluded_event(text: str | None) -> bool:
+    return bool(text and re.search(r"\bSchulstaffel\b", text, flags=re.IGNORECASE))
 
 
 def _nationality(value: str | None, event_year: int) -> str | None:
