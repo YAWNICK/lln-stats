@@ -8,6 +8,8 @@ Start Jupyter from the repository root with:
 UV_CACHE_DIR=/tmp/uv-cache uv run --with jupyter jupyter lab notebooks
 ```
 
-Open `explore_extracted_dataset.ipynb` for a general overview, or `explore_missing_bib_numbers.ipynb` to inspect the 27 rows where `bib_number` is missing.
+Open `explore_extracted_dataset.ipynb` for a general overview, or
+`explore_frequent_participants.ipynb` to rank athletes by the number of meetings
+where they finished at least one race.
 
 The notebook loads the raw source files through `lln_stats.extract.extract_all()` and caches the resulting table at `data/extracted/results.parquet`. Delete that parquet file to force a fresh extraction after changing extractor code or source data.

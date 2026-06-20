@@ -9,6 +9,14 @@ For a quick download, use one of these ready-made data files:
 
 The exported dataset currently contains 6,783 rows from event years 2016-2019 and 2021-2026. Lange Laufnacht did not take place in 2020 due to Covid.
 
+## Known Data Irregularities
+
+- Athlete names are generally stored surname first. The 2021 and 2022 source
+  files switched the order to given name first, so exact full-name matching can
+  miss the same athlete across years. For order-independent comparisons, split
+  `athlete_name` on whitespace and compare the resulting words as sets.
+- Timo Benitz and Lisa Rooms have inconsistent years of birth.
+
 ## Data Columns
 
 The exported files contain the same columns:
