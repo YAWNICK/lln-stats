@@ -11,6 +11,19 @@ dependencies = [
     "pyarrow>=24.0.0",
 ]
 
+[project.scripts]
+lln-extract = "lln_stats.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lln_stats"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
 [dependency-groups]
 dev = [
     "ipykernel>=7.3.0",
