@@ -12,9 +12,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Extract Lange Laufnacht results.")
     parser.add_argument("--year", type=int, help="Extract one event year instead of all years.")
     parser.add_argument("--output", type=Path, help="Optional CSV or Parquet output path.")
+    parser.add_argument(
+        "--all-events",
+        action="store_true",
+        help="Include non-target events and younger age groups.",
+    )
     args = parser.parse_args()
 
-    df = extract_year(args.year) if args.year else extract_all()
+    target_only = not args.all_events
+    df = extract_year(args.year, target_only=target_only) if args.year else extract_all(target_only=target_only)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         if args.output.suffix == ".parquet":

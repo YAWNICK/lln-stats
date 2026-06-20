@@ -61,6 +61,15 @@ EVENT_CODE_MAP = {
     "H3K0_0914": "3000m Hindernis 0.914m",
 }
 
+TARGET_EVENTS = {
+    "800m",
+    "1500m",
+    "5000m",
+    "3000m Hindernis",
+    "3000m Hindernis 0.762m",
+    "3000m Hindernis 0.914m",
+}
+
 
 def clean_text(value: Any) -> str | None:
     if value is None:
@@ -122,9 +131,15 @@ def parse_gender(value: Any) -> str | None:
     if not text:
         return None
     lower = text.lower()
-    if re.search(r"\b(w|weiblich|frauen|wju|w\d|kinder w|jugend w)\b", lower):
+    if "gemischt" in lower or re.search(r"\bm(?:ä|ae)nner\s*(?:&|und)\s*frauen\b", lower):
+        return None
+    gender_text = text.split(",", 1)[1] if "," in text else text
+    lower = gender_text.lower()
+    has_women = re.search(r"\b(w|weiblich(?:e|er)?|frauen|wju|w\d|kinder w|jugend w)\b", lower)
+    has_men = re.search(r"\b(m|männlich(?:e|er)?|maennlich(?:e|er)?|männer|maenner|mju|m\d|kinder m|jugend m)\b", lower)
+    if has_women:
         return "W"
-    if re.search(r"\b(m|männlich|maennlich|männer|maenner|mju|m\d|kinder m|jugend m)\b", lower):
+    if has_men:
         return "M"
     if text in {"M", "W"}:
         return text
@@ -190,3 +205,15 @@ def finalize_frame(rows: list[dict[str, Any]]) -> pd.DataFrame:
         df[column] = df[column].map(clean_text)
     df["gender"] = df["gender"].map(parse_gender)
     return df[RESULT_COLUMNS]
+
+
+def filter_target_results(df: pd.DataFrame) -> pd.DataFrame:
+    """Keep only target LLN running events, excluding side events and relays."""
+    if df.empty:
+        return df
+    relay_row = (
+        df["athlete_name"].str.contains(r"\b(?:staffel|relay)\b", case=False, regex=True, na=False)
+        | df["club"].str.contains(r"\b(?:staffel|relay)\b", case=False, regex=True, na=False)
+    )
+    filtered = df[df["event"].isin(TARGET_EVENTS) & ~relay_row].copy()
+    return filtered[RESULT_COLUMNS].reset_index(drop=True)

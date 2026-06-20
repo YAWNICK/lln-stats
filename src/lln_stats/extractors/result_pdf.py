@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,10 +33,12 @@ def extract(path: str | Path) -> object:
     source = Path(path)
     event_year = int(source.parent.name)
     rows: list[dict[str, object]] = []
+    gender_lookup = _load_gender_lookup(source)
     current_event_line: str | None = None
     current_event: str | None = None
     current_gender: str | None = None
     current_heat: int | None = None
+    inferred_heat_counts: dict[tuple[str | None, str | None], int] = {}
     last_row: dict[str, object] | None = None
 
     with pdfplumber.open(source) as pdf:
@@ -50,13 +53,18 @@ def extract(path: str | Path) -> object:
                     current_event_line = event_line
                     current_event = normalize_event(event_line)
                     current_gender = parse_gender(event_line)
-                    current_heat = None
+                    current_heat = (
+                        _next_inferred_heat(inferred_heat_counts, current_event, current_gender)
+                        if event_year == 2019
+                        else None
+                    )
                     last_row = None
                     continue
 
                 heat = _heat_from_line(text)
                 if heat is not None:
-                    current_heat = heat
+                    if event_year != 2019:
+                        current_heat = heat
                     last_row = None
                     continue
 
@@ -66,13 +74,16 @@ def extract(path: str | Path) -> object:
                 row = _parse_result_line(line)
                 if row:
                     rank_from_mark, heat_from_mark = parse_result_mark(row.pop("mark", None))
+                    gender = current_gender or parse_gender(current_event_line)
+                    if gender is None and event_year == 2019 and current_event == "5000m":
+                        gender = gender_lookup.get(str(row.get("athlete_name") or ""))
                     row.update(
                         {
                             "event_year": event_year,
                             "event": current_event,
-                            "gender": current_gender or parse_gender(current_event_line),
+                            "gender": gender,
                             "rank_within_heat": rank_from_mark or row.get("rank"),
-                            "heat": heat_from_mark or current_heat or 1,
+                            "heat": _row_heat(event_year, current_heat, heat_from_mark),
                             "source_file": str(source),
                             "source_type": "result_pdf",
                         }
@@ -88,6 +99,18 @@ def extract(path: str | Path) -> object:
                         last_row["club"] = f"{last_row.get('club') or ''} {extra}".strip()
 
     return finalize_frame(rows)
+
+
+def _load_gender_lookup(source: Path) -> dict[str, str]:
+    path = source.parent / "5000m_mixed_gender_lookup.csv"
+    if not path.exists():
+        return {}
+    with path.open(encoding="utf-8", newline="") as csv_file:
+        return {
+            row["athlete_name"]: row["gender"]
+            for row in csv.DictReader(csv_file)
+            if row.get("athlete_name") and row.get("gender")
+        }
 
 
 def _iter_lines(words: Iterable[dict[str, object]]) -> Iterable[Line]:
@@ -121,6 +144,8 @@ def _event_line(text: str) -> str | None:
         return None
     if "Zwischenzeiten" in text or "Wind:" in text:
         return None
+    if re.fullmatch(r"\d{3,4}m\s+\d+(?::\d{1,2})?,\d+", text):
+        return None
     if re.fullmatch(r"\d{3,4}m", text.replace(" ", "")):
         return None
     if EVENT_RE.search(text) and not re.match(r"^\d+\s+\d+\s+", text):
@@ -131,6 +156,22 @@ def _event_line(text: str) -> str | None:
 def _heat_from_line(text: str) -> int | None:
     match = re.match(r"Zeitlauf\s+(\d+)", text)
     return int(match.group(1)) if match else None
+
+
+def _next_inferred_heat(
+    counts: dict[tuple[str | None, str | None], int],
+    event: str | None,
+    gender: str | None,
+) -> int:
+    key = (event, gender)
+    counts[key] = counts.get(key, 0) + 1
+    return counts[key]
+
+
+def _row_heat(event_year: int, current_heat: int | None, heat_from_mark: int | None) -> int:
+    if event_year == 2019:
+        return current_heat or heat_from_mark or 1
+    return heat_from_mark or current_heat or 1
 
 
 def _parse_result_line(line: Line) -> dict[str, object] | None:
