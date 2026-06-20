@@ -66,8 +66,6 @@ TARGET_EVENTS = {
     "1500m",
     "5000m",
     "3000m Hindernis",
-    "3000m Hindernis 0.762m",
-    "3000m Hindernis 0.914m",
 }
 
 
@@ -124,6 +122,15 @@ def normalize_event_code(code: Any) -> str | None:
         return EVENT_CODE_MAP[text]
     base = text.split("_", 1)[0]
     return EVENT_CODE_MAP.get(base, text)
+
+
+def normalize_event_feature(value: Any) -> str | None:
+    raw_event = normalize_event(value)
+    if raw_event in {"800m", "1500m", "5000m"}:
+        return raw_event
+    if raw_event and raw_event.startswith("3000m Hindernis"):
+        return "3000m Hindernis"
+    return None
 
 
 def parse_gender(value: Any) -> str | None:
@@ -186,13 +193,16 @@ def normalize_name(value: Any) -> str | None:
 
 def finalize_frame(rows: list[dict[str, Any]]) -> pd.DataFrame:
     df = pd.DataFrame(rows)
+    if "raw_event" not in df.columns and "event" in df.columns:
+        df["raw_event"] = df["event"]
     for column in RESULT_COLUMNS:
         if column not in df.columns:
             df[column] = None
     if df.empty:
         return df[RESULT_COLUMNS]
 
-    df["event"] = df["event"].map(normalize_event)
+    df["raw_event"] = df["raw_event"].map(normalize_event)
+    df["event"] = df["raw_event"].map(normalize_event_feature)
     df["athlete_name"] = df["athlete_name"].map(normalize_name)
     df["bib_number"] = df["bib_number"].map(parse_int).astype("Int64")
     df["year_of_birth"] = df["year_of_birth"].map(parse_int).astype("Int64")

@@ -2,6 +2,7 @@
 
 RESULT_COLUMNS = [
     "event_year",
+    "raw_event",
     "event",
     "athlete_name",
     "bib_number",

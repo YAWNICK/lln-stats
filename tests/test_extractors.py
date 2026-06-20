@@ -19,6 +19,7 @@ def test_legacy_html_2016_row() -> None:
     assert list(df.columns) == RESULT_COLUMNS
     row = df.iloc[0]
     assert row.event_year == 2016
+    assert row.raw_event == "800m"
     assert row.event == "800m"
     assert row.athlete_name == "Ludolph Sören"
     assert row.bib_number == 15
@@ -89,7 +90,8 @@ def test_pdf_2023_uses_rank_heat_mark() -> None:
 def test_pdf_2024_does_not_treat_wind_as_event() -> None:
     df = extract_year(2024, target_only=False)
     row = df.iloc[0]
-    assert row.event == "100m"
+    assert row.raw_event == "100m"
+    assert df.event.isna().iloc[0]
     assert row.athlete_name == "Burraj Franko"
     assert row.result_raw == "10,63"
 
@@ -97,8 +99,20 @@ def test_pdf_2024_does_not_treat_wind_as_event() -> None:
 def test_default_extraction_keeps_target_events_and_skips_side_events() -> None:
     df = extract_year(2024)
     assert set(df.event.dropna().unique()) <= TARGET_EVENTS
+    assert df.event.isna().sum() == 0
     assert "100m" not in set(df.event.dropna())
     assert "1000m" not in set(df.event.dropna())
+
+
+def test_event_collapses_steeplechase_heights() -> None:
+    df = extract_year(2023)
+    steeplechase = df[df.raw_event.str.contains("Hindernis", na=False)]
+    assert set(steeplechase.raw_event.unique()) == {
+        "3000m Hindernis",
+        "3000m Hindernis 0.762m",
+        "3000m Hindernis 0.914m",
+    }
+    assert set(steeplechase.event.unique()) == {"3000m Hindernis"}
 
 
 def test_default_extraction_keeps_younger_athletes_in_u18_races() -> None:
